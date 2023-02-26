@@ -191,6 +191,6 @@ contract PancakeswapV2LiquidityLocker {
         uint256 _percentMul100 = balance * 100 * 100 / totalSupply;
 
         // Return percentage and percentage multiplied by 100
-        return (percentMul100 / 100, _percentMul100);
+        return (_percentMul100 / 100, _percentMul100);
     }
 }
