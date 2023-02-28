@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 /// to the ERC20 specification
 interface IUniswapV3Pool {
     // The current in range liquidity available to the pool 
-    function liquidity() view external returns (uint128);
+    function liquidity() external view returns (uint128);
 
     // Collect fees
     function collect(
@@ -29,7 +29,13 @@ interface IUniswapV3Pool {
         // Current tick
         int24 tick;
     }
-    function slot0() view external returns (Slot0 memory slot0);
+    function slot0() external view returns (Slot0 memory slot0);
+    
+    // Pool token0 contract address
+    function token0() external view returns (address);
+
+    // Pool token1 contract address
+    function token1() external view returns (address);
 }
 
 interface INonfungiblePositionManager {
@@ -110,22 +116,21 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
     /// @notice Uniswap V3 Pool address
     address public immutable uniswapV3Pool;
 
+    /// @notice Uniswap V3: Positions NFT contract address
+    address public immutable uniswapV3PositionManager;
+
     /// @notice The owner of the locker contract and liquidity.
     address public owner;
-
-    /// @notice Uniswap V3 Position Token ID
-    uint256[] private tokenIds;
 
     /// @notice Unlock date as a unix timestamp. You can convert the timestamp to a readable date-time at https://www.unixtimestamp.com/.
     uint public unlockDate;
 
-    /// @notice Uniswap V3: Positions NFT contract address
-    address public immutable uniswapV3PositionManager;
+    /// @notice Uniswap V3 Position Token ID
+    uint256[] private tokenIds;
 
     // Definition of events.
     // If event is emitted, it stores the arguments passed in transaction logs.
-    // These logs are stored on blockchain and are accessible using address of the
-    // contract till the contract is present on the blockchain.
+    // These logs are stored on blockchain and are accessible using address of the contract.
     event OwnerChanged(address oldOwner, address newOwner);
     event LiquidityLocked(uint until);
     event LiquidityUnlocked(uint256 tokenId, uint date);
@@ -144,9 +149,6 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
 
         // Set Uniswap V3: Position NFT contract address
         uniswapV3PositionManager = _uniswapV3PositionManager;
-
-        // Simplified check if lpToken is a contract
-        //lpTokenBalance();
     }
 
     /**
@@ -157,7 +159,8 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
         // The function will fail if the contract is not called by its owner
         require (msg.sender == owner);
 
-        // Run the rest of the modified function code
+        // The _; symbol is a special symbol that is used in Solidity modifiers to indicate the end of 
+        // the modifier and the beginning of the function that the modifier is modifying.
         _;
     }
 
@@ -197,7 +200,10 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
         require (from == owner, "Denied");
         
         // Check if the token is a Uniswap V3 NFT Position token
-        getPositionByTokenId(tokenId);
+        (address token0, address token1,,,) = getPositionByTokenId(tokenId);
+
+        // Check if the token belongs to the Uniswap V3 Pool (uniswapV3Pool)
+        require ((token0 == IUniswapV3Pool(uniswapV3Pool).token0()) && (token1 == IUniswapV3Pool(uniswapV3Pool).token1()), "Invalid token");
 
         // Check if tokenId is not in the list of tokens
         require (getTokenIndexById(tokenId) == type(uint256).max, "Token exists");
@@ -323,13 +329,15 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
      * @notice Get position information by token ID
      * @param tokenId Token ID
      * Range is [tickLower, tickUpper]
+     * @return token0 The token0 contract address
+     * @return token1 The token1 contract address
      * @return tickLower lower tick value
      * @return tickUpper upper tick value
      * @return liquidity the liquidity of the position
      */
-    function getPositionByTokenId(uint256 tokenId) public view returns (int24 tickLower, int24 tickUpper, uint128 liquidity) {
-        (,,,,, tickLower, tickUpper, liquidity,,,,) = INonfungiblePositionManager(uniswapV3PositionManager).positions(tokenId);
-        return (tickLower, tickUpper, liquidity);
+    function getPositionByTokenId(uint256 tokenId) public view returns (address token0, address token1, int24 tickLower, int24 tickUpper, uint128 liquidity) {
+        (,, token0, token1,, tickLower, tickUpper, liquidity,,,,) = INonfungiblePositionManager(uniswapV3PositionManager).positions(tokenId);
+        return (token0, token1, tickLower, tickUpper, liquidity);
     }
 
     /**
@@ -361,7 +369,7 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
         for (uint256 i = 0; i < tokenIds.length; i++) {
 
             // Get position data for tokenId
-            (int24 tickLower, int24 tickUpper, uint128 liquidity) = getPositionByTokenId(tokenIds[i]);
+            (,, int24 tickLower, int24 tickUpper, uint128 liquidity) = getPositionByTokenId(tokenIds[i]);
             
             // Check if liquidity of position is in the range
             if ((tickLower <= tick) && (tick <= tickUpper)) {
