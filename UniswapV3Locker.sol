@@ -3,8 +3,33 @@
 // Use the solidity compiler version 0.8.0 or later
 pragma solidity >=0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+
+/// @title ERC721 interface
+interface IERC721 {
+    /**
+     * @dev Returns the owner of the `tokenId` token.
+     *
+     * Requirements:
+     *
+     * - `tokenId` must exist.
+     */
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+
+    /**
+     * @dev Safely transfers `tokenId` token from `from` to `to`.
+     *
+     * Requirements:
+     *
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     * - `tokenId` token must exist and be owned by `from`.
+     * - If the caller is not `from`, it must be approved to move this token by either {approve} or {setApprovalForAll}.
+     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
+     *
+     * Emits a {Transfer} event.
+     */
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;    
+}
 
 /// @title The interface for a Uniswap V3 Pool
 /// @notice A Uniswap pool facilitates swapping and automated market making between any two assets that strictly conform
@@ -38,6 +63,7 @@ interface IUniswapV3Pool {
     function token1() external view returns (address);
 }
 
+/// @title Interface to Uniswap V3 NonfungiblePositionManager contract
 interface INonfungiblePositionManager {
     /// @notice Returns the position information associated with a given token ID.
     /// @dev Throws if the token ID is not valid.
@@ -106,7 +132,7 @@ interface INonfungiblePositionManager {
  * 6. It is possible to extend the lock period with the "lock" function, but it cannot be reduced. 
  * 7. It is possible to add liquidity to the locker by transfering LP-tokens to the locker contract (this).
  */
-contract UniswapV3LiquidityLocker is IERC721Receiver {
+contract UniswapV3LiquidityLocker {
     /* @dev Contract constants and variables:
      * "public" means that the variable can be read by public (e.g. any bscscan.com user).
      * "private" means that the variable can be accessed by this contract only.
@@ -288,7 +314,7 @@ contract UniswapV3LiquidityLocker is IERC721Receiver {
         INonfungiblePositionManager.CollectParams memory params =
             INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,      // ERC721 token ID
-                recipient: msg.sender, // recipient of fees
+                recipient: owner, // recipient of fees
                 amount0Max: type(uint128).max,
                 amount1Max: type(uint128).max
             });
